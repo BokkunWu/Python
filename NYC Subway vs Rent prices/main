@@ -1,0 +1,88 @@
+import pandas as pd
+import numpy as np
+from geopy.geocoders import Nominatim
+from geopy import distance
+from ast import literal_eval
+import matplotlib.pyplot as plt
+from pylab import *
+
+
+df = pd.read_excel('Streeteasy_Scraped.xlsx', sheet_name = 'Address')
+mta = pd.read_excel('Transit.xlsx', sheet_name = 'Coordinates')
+
+#Uses a lambda function, if it has a value, apply() else insert Not A Value
+df['Latitude'] = df['Coordinates'].apply(lambda x: x.latitude if x != None else None)
+df['Longitude'] = df['Coordinates'].apply(lambda x: x.longitude if x != None else None)
+
+#Save
+writer = pd.ExcelWriter('NYC.xlsx')
+df.to_excel(writer, 'new_sheet')
+writer.save()
+
+
+df = pd.read_excel('NYC.xlsx', sheet_name = 'NYC')
+mta = pd.read_excel('Transit.xlsx', sheet_name = 'Coordinates')
+
+
+#Converts my Coordinates column from String to Tuple
+df['Location'] = [literal_eval(x) for x in df['Location']]
+mta['Entrance Location'] = [literal_eval(x) for x in mta['Entrance Location']]
+
+#Create new columns for the closest station and the distance to it
+df['Station'] = 'Station'
+df['Distance'] = 0
+
+#nested for loop that goes through apartments then stations to find the closest one
+for x in range(len(df)):
+    z = 0
+    closest = 26400.0000
+    for y in range(len(mta)):  
+        #print(x, " ", y)
+        if closest >= distance.distance(df.at[x, 'Location'], mta.at[y, 'Entrance Location']).feet:
+            closest = distance.distance(df.at[x, 'Location'], mta.at[y, 'Entrance Location']).feet
+            z = y
+
+    print(x, " -------------------------------------------------------------------------------------------")
+    print(df.at[x, 'Address'], " --------- ", mta.at[z, 'Station Name'],)   
+    print(df.at[x, 'Location'], " --- ", mta.at[z, 'Entrance Location'], " --- ", closest) 
+    
+    #filling in the two new columns
+    df.at[x, 'Station'] = mta.at[z, 'Station Name']
+    df.at[x, 'Distance'] = closest
+    
+#Some locations are in Staten Island/bordering NJ, removing some outliers
+df = df[df['Distance'] <= 26400]
+    
+    
+#Save
+writer = pd.ExcelWriter('NYC_Final.xlsx')
+df.to_excel(writer, 'new_sheet')
+writer.save()
+
+
+df = pd.read_excel('NYC_Final.xlsx', sheet_name = 'new_sheet')
+
+    x = df['Distance']
+    y = df['Price']
+    fig = plt.figure(figsize=(7,7))
+    
+    title('Distance from Subway')
+    xlabel('Distance(ft)')
+    ylabel('Price')
+
+    
+    #Set the trend line
+    z = np.polyfit(x, y, 1)
+    p = np.poly1d(z)
+    plt.plot(x,p(x),"r--")
+    
+    axScatter = plt.subplot(111)
+    axScatter.scatter(x, y)
+   
+    #Annotate trend line equation and limit the outliers
+    plt.annotate("y=%.6fx+%.6f"%(z[0],z[1]), xy=(0.60, 0.50), xycoords='axes fraction')
+    plt.xlim(0, 5280)
+    plt.ylim(750, 3000)
+    plt.show()
+    
+    
